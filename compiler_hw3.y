@@ -366,34 +366,20 @@ Assignment
 ;
 IncDec
     : Expr INC { //printf("INC\n"); }
-        fprintf(fp , "ldc 1\n");
         if(!strcmp(printtype , "int32"))
-            fprintf(fp , "iadd\nistore %d\n" , findstack(yylval.s_val));
+            fprintf(fp , "ldc 1\niadd\nistore %d\n" , findstack(yylval.s_val));
         else if(!strcmp(printtype , "float32"))
-            fprintf(fp , "fadd\nfstore %d\n" , findstack(yylval.s_val));
+            fprintf(fp , "ldc 1.0\nfadd\nfstore %d\n" , findstack(yylval.s_val));
         }
     | Expr DEC { //printf("DEC\n"); }
-        fprintf(fp , "ldc 1\n");
         if(!strcmp(printtype , "int32"))
-            fprintf(fp , "isub\nistore %d\n" , findstack(yylval.s_val));
+            fprintf(fp , "ldc 1\nisub\nistore %d\n" , findstack(yylval.s_val));
         else if(!strcmp(printtype , "float32"))
-            fprintf(fp , "fsub\nfstore %d\n" , findstack(yylval.s_val));
+            fprintf(fp , "ldc 1.0\nfsub\nfstore %d\n" , findstack(yylval.s_val));
     }
 ;
 PrintStmt
     : PRINT '(' Expr ')' { //printf("%s" , "PRINT"); 
-        fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
-        fprintf(fp , "swap\n");
-        if (!strcmp(printtype , "int32"))
-            fprintf(fp , "invokevirtual java/io/PrintStream/println(I)V\n");
-        else if (!strcmp(printtype , "float32"))
-            fprintf(fp , "invokevirtual java/io/PrintStream/println(F)V\n");
-        else if (!strcmp(printtype , "string"))
-            fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
-        else if (!strcmp(printtype , "bool"))
-            fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
-    }
-    | PRINTLN '(' Expr ')' { //printf("%s", "PRINTLN"); 
         fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
         fprintf(fp , "swap\n");
         if (!strcmp(printtype , "int32"))
@@ -404,6 +390,18 @@ PrintStmt
             fprintf(fp ,"invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
         else if (!strcmp(printtype , "bool"))
             fprintf(fp ,"invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
+    }
+    | PRINTLN '(' Expr ')' { //printf("%s", "PRINTLN"); 
+        fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
+        fprintf(fp , "swap\n");
+        if (!strcmp(printtype , "int32"))
+            fprintf(fp , "invokevirtual java/io/PrintStream/println(I)V\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "invokevirtual java/io/PrintStream/println(F)V\n");
+        else if (!strcmp(printtype , "string"))
+            fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
+        else if (!strcmp(printtype , "bool"))
+            fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
     }
 ;
 Block
@@ -454,7 +452,7 @@ int main(int argc, char *argv[])
     fprintf(fp , ".source hw3.j\n.class public Main\n");
     fprintf(fp , ".super java/lang/Object\n");
     fprintf(fp , ".method public static main([Ljava/lang/String;)V\n");
-    fprintf(fp , ".limit stack 100\n.limit locals 100\n");
+    fprintf(fp , ".limit stack 100\n.limit locals 100 ;\n");
     table = malloc(sizeof(struct table));
     head = table;
     find = table;
