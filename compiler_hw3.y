@@ -51,10 +51,13 @@
         int intnum;//store integer number or boolean
         float floatnum;//store floating number
         char *content;//store string
+        int status;//-1 means pop out
     };
     struct Stack stack[100];
     int current;//current stack
     int findstack(char *name);//find variable and load which stack position
+    char *jump = "label";//for jump label name
+    int label;  // distinguish jump label number(for some jump and if instruction)
 %} 
 
 %error-verbose
@@ -128,7 +131,25 @@ Dcls
 ;
 Dcl
     : VAR IDdcl Type 
-    { 
+    {
+        stack[current].name = table->name;
+        stack[current].type = table->type;
+        if(!strcmp(table->type,"int32") || !strcmp(table->type , "bool"))
+        {
+            fprintf(fp , "ldc 0\nistore %d\n" , current);
+            stack[current].intnum = yylval.i_val;
+        }
+        else if(!strcmp(table->type , "float32"))
+        {
+            fprintf(fp , "ldc 0.0\nfstore %d\n" , current);
+            stack[current].floatnum = yylval.f_val;
+        }
+        else if(!strcmp(table->type , "string"))
+        {
+            fprintf(fp , "ldc \"\"\nastore %d\n" , current);
+            stack[current].content = yylval.s_val;
+        }
+        current = current + 1;
         find = get(table->name);
         if(find == NULL)
         {
@@ -150,7 +171,8 @@ Dcl
         stack[current].type = table->type;
         if(!strcmp(table->type,"int32") || !strcmp(table->type , "bool"))
         {
-            fprintf(fp , "istore %d\n" , current);
+
+fprintf(fp , "istore %d\n" , current);
             stack[current].intnum = yylval.i_val;
         }
         else if(!strcmp(table->type , "float32"))
@@ -255,9 +277,23 @@ Expr
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "irem\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "frem\n");
     }
-    | Expr EQL Expr { printf("EQL\n"); printtype = "bool";}
+    | Expr EQL Expr { //printf("EQL\n"); 
+        printtype = "bool";
+//        fprintf(fp , "ifeq %s%d_0\n" , jump , label);
+    }
     | Expr '<' Expr { printf("LSS\n"); printtype = "bool";}
-    | Expr '>' Expr { printf("GTR\n"); printtype = "bool";}
+    | Expr '>' Expr { //printf("GTR\n"); 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "isub\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "fcmpl\n");
+        fprintf(fp , "ifgt %s%d_0\n" , jump , label);
+        fprintf(fp , "iconst_0\ngoto %s%d_1\n" , jump , label);
+        fprintf(fp , "%s%d_0:\n" , jump , label);
+        fprintf(fp , "iconst_1\n%s%d_1:\n" , jump , label);
+        label = label + 1;
+        printtype = "bool";
+    }
     | Expr NEQ Expr { printf("NEQ\n"); printtype = "bool";}
     | Expr GEQ Expr { printf("GEQ\n"); printtype = "bool";}
     | Expr LEQ Expr { printf("LEQ\n"); printtype = "bool";}
@@ -267,6 +303,7 @@ Expr
         printf(" invalid operation: (operator LOR not defined on %s)\n" , s1);}
       else if (strcmp("bool" , s2)){ yyerror();
         printf(" invalid operation: (operator LOR not defined on %s)\n" , s2);}
+      fprintf(fp , "ior\n");
       printf("LOR\n"); }
     | Expr LAND { s1 = printtype; } Expr
     { s2 = printtype; 
@@ -274,13 +311,22 @@ Expr
         printf(" invalid operation: (operator LAND not defined on %s)\n" , s1);}
       else if (strcmp("bool" , s2)){ yyerror();
         printf(" invalid operation: (operator LAND not defined on %s)\n" , s2);}
+      fprintf(fp , "iand\n");
       printf("LAND\n"); }
 ;
 UnaryExpr
     : PrimaryExpr
-    | '+' UnaryExpr { printf("POS\n"); }
-    | '-' UnaryExpr { printf("NEG\n"); }
-    | '!' UnaryExpr { printf("NOT\n"); }
+    | '+' UnaryExpr { /*printf("POS\n");*/ }
+    | '-' UnaryExpr { 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "ineg\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "fneg\n");
+    }
+    | '!' UnaryExpr {
+        fprintf(fp , "iconst_1\n");
+        fprintf(fp , "ixor\n");
+    }
 ;
 
 PrimaryExpr 
@@ -331,10 +377,10 @@ Literal
     printtype = "int32";
     datatype = "LIT";}
     | FLOAT_LIT { //printf("%s %f\n" , "FLOAT_LIT" , yylval.f_val); 
-    fprintf(fp , "ldc %f\n" , yylval.f_val);
+    fprintf(fp , "ldc %.6f\n" , yylval.f_val);
     printtype = "float32";}
     | STRING_LIT { //printf("%s %s\n" , "STRING_LIT" , yylval.s_val); 
-    fprintf(fp , "ldc %s\n" , yylval.s_val);
+    fprintf(fp , "ldc \"%s\"\n" , yylval.s_val);
     printtype = "string";}
     | TRUE { //printf("TRUE\n"); 
     fprintf(fp , "iconst_1\n");
@@ -380,6 +426,15 @@ IncDec
 ;
 PrintStmt
     : PRINT '(' Expr ')' { //printf("%s" , "PRINT"); 
+        if(!strcmp(printtype , "bool"))
+        {
+            fprintf(fp , "ifne %s%d_0\n" , jump , label);
+            fprintf(fp , "ldc \"false\"\ngoto %s%d_1\n" , jump , label);
+            fprintf(fp , "%s%d_0:\n" , jump , label);
+            fprintf(fp , "ldc \"true\"\n");
+            fprintf(fp , "%s%d_1:\n" , jump , label);
+            label = label + 1;
+        }
         fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
         fprintf(fp , "swap\n");
         if (!strcmp(printtype , "int32"))
@@ -392,6 +447,15 @@ PrintStmt
             fprintf(fp ,"invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
     }
     | PRINTLN '(' Expr ')' { //printf("%s", "PRINTLN"); 
+        if(!strcmp(printtype , "bool"))
+        {
+            fprintf(fp , "ifne %s%d_0\n" , jump , label);
+            fprintf(fp , "ldc \"false\"\ngoto %s%d_1\n" , jump , label);
+            fprintf(fp , "%s%d_0:\n" , jump , label);
+            fprintf(fp , "ldc \"true\"\n");
+            fprintf(fp , "%s%d_1:\n" , jump , label);
+            label = label + 1;
+        }
         fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
         fprintf(fp , "swap\n");
         if (!strcmp(printtype , "int32"))
@@ -475,7 +539,7 @@ int main(int argc, char *argv[])
         head = head->next;
         free(tmp);
     }
-    fprintf(fp , "return\n.end method");
+    fprintf(fp , "return\n.end method\n");
     if(HAS_ERROR) {
         remove("hw3.j");
     }
@@ -499,6 +563,8 @@ static void lookup_symbol() {
 }
 
 static void dump_symbol() {
+    char *namelist[30];
+    int number = 0;
     printf("> Dump symbol table (scope level: %d)\n", nowlevel);
     printf("%-10s%-10s%-10s%-10s%-10s%s\n",
            "Index", "Name", "Type", "Address", "Lineno", "Element type");
@@ -512,9 +578,18 @@ static void dump_symbol() {
                 find = find->next;
             printf("%-10d%-10s%-10s%-10d%-10d%s\n",
                 i, find->name , find->type, find->address, find->linenum, find->eletype);
+            namelist[number] = find->name;
+            number = number + 1;
             find->level = -1;
             find = find->next;
         }
+        for(int i = 1;i <= number;i++)
+            for(int j = 1;j <= current;j++)
+                if(!strcmp(namelist[number-i] , stack[current-j].name) && stack[current-j].status != -1)
+                {
+                    stack[current-j].status = -1;//pop this variable(set it's status to -1
+                    break;
+                }
     }
     nowlevel = nowlevel - 1;
 }
@@ -547,8 +622,10 @@ int getlevelnum()
 }
 int findstack(char *name)
 {
-    for(int i = 0;i < current;i++)
-        if(!strcmp(name , stack[i].name))
-            return i;
+    for(int i = 1;i <= current;i++)//from the top of stack to find the variable
+        if(!strcmp(name , stack[current-i].name) && stack[current-i].status != -1)
+        {
+            return current - i;
+        }
     return 0;
 }
