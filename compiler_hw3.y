@@ -205,17 +205,21 @@ IfStmts
     |
 ;
 IfStmt
-    : IF Condition Block
+    : IF Condition Block 
+    {
+        fprintf(fp , "%s%d_false:\n" , jump , label);//condition false
+    }
     | IF Condition Block ELSE IfStmt
     | IF Condition Block ELSE Block
 ;
 Condition
     : Expr 
     { 
-    if (strcmp(printtype , "bool"))
-    {
-        printf("error:%d: non-bool (type %s) used as for condition\n" , yylineno+1 , printtype);
-    }
+        if (strcmp(printtype , "bool"))
+        {
+            printf("error:%d: non-bool (type %s) used as for condition\n" , yylineno+1 , printtype);
+        }
+        fprintf(fp , "ifeq %s%d_false\n" , jump , label);
     }
         
 ;
@@ -280,8 +284,16 @@ Expr
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "frem\n");
     }
     | Expr EQL Expr { //printf("EQL\n"); 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "isub\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "fcmpl\n");
+        fprintf(fp , "ifeq %s%d_0\n" , jump , label);
+        fprintf(fp , "iconst_0\ngoto %s%d_1\n" , jump , label);
+        fprintf(fp , "%s%d_0:\n" , jump , label);
+        fprintf(fp , "iconst_1\n%s%d_1:\n" , jump , label);
+        label = label + 1;
         printtype = "bool";
-//        fprintf(fp , "ifeq %s%d_0\n" , jump , label);
     }
     | Expr '<' Expr { printf("LSS\n"); printtype = "bool";}
     | Expr '>' Expr { //printf("GTR\n"); 
