@@ -58,6 +58,8 @@
     int findstack(char *name);//find variable and load which stack position
     char *jump = "label";//for jump label name
     int label;  // distinguish jump label number(for some jump and if instruction)
+    char *leftvar;//store left variable name
+    void printassign();
 %} 
 
 %error-verbose
@@ -390,9 +392,12 @@ Literal
     printtype = "bool";}
 ;
 Assignment
-    : Expr '='{ s1 = printtype; } Expr
-    { s2 = printtype; if(find != NULL) invalidoper("ASSIGN"); printf("ASSIGN\n");}
-    | Expr
+    : LeftExpr '='{ s1 = printtype; } Expr 
+    {
+        printassign();
+        s2 = printtype; if(find != NULL) invalidoper("ASSIGN"); printf("ASSIGN\n");
+    }
+    | LeftExpr
     {
         if(!strcmp(datatype , "LIT"))
         {
@@ -401,14 +406,51 @@ Assignment
         datatype = "";
     }
     ADD_ASSIGN Expr 
-    { 
+    {
+        if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
+            fprintf(fp , "iload %d\niadd\n" , findstack(leftvar));
+        else if(!strcmp(printtype , "float32"))
+            fprintf(fp , "fload %d\nfadd\n" , findstack(leftvar));
+        printassign();
         if(temp == 1)
             printf("error:%d: cannot assign to int32\n" , yylineno);
-        printf("ADD_ASSIGN\n"); }
-    | Expr SUB_ASSIGN Expr { printf("SUB_ASSIGN\n"); }
-    | Expr MUL_ASSIGN Expr { printf("MUL_ASSIGN\n"); }
-    | Expr QUO_ASSIGN Expr { printf("QUO_ASSIGN\n"); }
-    | Expr REM_ASSIGN Expr { printf("REM_ASSIGN\n"); }
+        printf("ADD_ASSIGN\n"); 
+            
+    }
+    | LeftExpr SUB_ASSIGN Expr { 
+        if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
+            fprintf(fp , "iload %d\nswap\nisub\n" , findstack(leftvar));
+        else if(!strcmp(printtype , "float32"))
+            fprintf(fp , "fload %d\nswap\nfsub\n" , findstack(leftvar));
+        printassign();
+        printf("SUB_ASSIGN\n"); 
+    }
+    | LeftExpr MUL_ASSIGN Expr { 
+        if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
+            fprintf(fp , "iload %d\nimul\n" , findstack(leftvar));
+        else if(!strcmp(printtype , "float32"))
+            fprintf(fp , "fload %d\nfmul\n" , findstack(leftvar));
+        printassign();
+        printf("MUL_ASSIGN\n"); 
+    }
+    | LeftExpr QUO_ASSIGN Expr { 
+        if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
+            fprintf(fp , "iload %d\nswap\nidiv\n" , findstack(leftvar));
+        else if(!strcmp(printtype , "float32"))
+            fprintf(fp , "fload %d\nswap\nfdiv\n" , findstack(leftvar));
+        printassign();
+        printf("QUO_ASSIGN\n"); 
+    }
+    | LeftExpr REM_ASSIGN Expr { 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "iload %d\nswap\nirem\n" , findstack(leftvar));
+        printassign();
+        printf("REM_ASSIGN\n"); 
+    }
+;
+LeftExpr
+    : ID { leftvar = yylval.s_val; }
+    | IndexExpr { leftvar = yylval.s_val; }
 ;
 IncDec
     : Expr INC { //printf("INC\n"); }
@@ -628,4 +670,13 @@ int findstack(char *name)
             return current - i;
         }
     return 0;
+}
+void printassign()
+{
+    if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
+        fprintf(fp , "istore %d\n" , findstack(leftvar));
+    else if(!strcmp(printtype , "float32"))
+        fprintf(fp , "fstore %d\n" , findstack(leftvar));
+    else if(!strcmp(printtype , "string"))
+        fprintf(fp , "astore %d\n" , findstack(leftvar));
 }
