@@ -535,19 +535,21 @@ Conversion
         {
             printf("%s to %s\n" , "F" , changetype);
             printtype = "int32";
+            fprintf(fp , "f2i\n");
+//            stack[findstack(yylval.s_val)].type = "int32";
         }
         else
         {
             printf("%s to %s\n" , "I" , changetype);
             printtype = "float32";
+            fprintf(fp , "i2f\n");
+//            stack[findstack(yylval.s_val)].type = "float32";
         }
     }
 ;
 Type_Change
     : INT    { changetype = "I";}
     | FLOAT  { changetype = "F";}
-/*    | STRING { $$ = strdup("string"); table->eletype = "-"; table->type = "string"; }
-    | BOOL   { $$ = strdup("bool"); table->eletype = "-"; table->type = "bool"; }*/
 ;
 %%
 
