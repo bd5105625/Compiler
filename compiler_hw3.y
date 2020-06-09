@@ -7,10 +7,12 @@
     extern int yylineno;
     extern int yylex();
     extern FILE *yyin;
-
+    int HAS_ERROR = 0;
     void yyerror()
     {
         printf("error:%d:" , yylineno);
+        HAS_ERROR = 1;
+//        printf("~~~has error\n");
     }
 
     /* Symbol table function - you can add new function if needed. */
@@ -44,7 +46,6 @@
         }
     }
     int temp;
-    int HAS_ERROR = 0;
     struct Stack {
         char *name;//store variable name
         char *type;//store variable type
@@ -58,16 +59,18 @@
     int findstack(char *name);//find variable and load which stack position
     char *jump = "label";//for jump label name
     int label;  // distinguish jump label number(for some jump and if instruction)
+    int num_for; //distinguush jump label number for "for" instruction
     char *leftvar;//store left variable name
     void printassign();
     int temp;// for calculating label num in "if"
     char label_exit[10][20];
+    char label_for[10][20];
     int num_exit , first;
 %} 
 
 %error-verbose
 
-/* Use variable or self-defined structure to represent
+/* Use variable or `self-defined structure to represent
  * nonterminal and token type
  */
 %union {
@@ -107,7 +110,7 @@
 /* Grammar section */
 %%
 Program
-    : StatementList { datatype = ""; num_exit = 0; }
+    : StatementList { datatype = ""; num_exit = 0; num_for = 0; }
 ;
 
 StatementList
@@ -229,24 +232,6 @@ IfStmt
     | IF Condition_if Block_if
       ELSE Block_Else 
 ;
-/*Condition_if_1
-    : Expr
-    {
-        if (strcmp(printtype , "bool"))
-        {
-            printf("error:%d: non-bool (type %s) used as for condition\n",yylineno+1,printtype);
-        }
-        char c[10];
-        char temp1[100] = "";
-        sprintf(c , "%d" , label);
-        strcat(temp1 , jump);
-        strcat(temp1 , c);
-        strcat(temp1 , "_false");
-        strcpy(label_exit[num_exit] , temp1);
-        fprintf(fp , "ifeq %s%d_false\n" , jump , label);
-        num_exit = num_exit + 1;
-    }
-; */       
 Condition_if
     : Expr 
     { 
@@ -265,11 +250,44 @@ Condition
     {
         if(strcmp(printtype , "bool"))
             printf("error:%d: non-bool (type %s) used as for condition\n",yylineno+1,printtype);
+
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , num_for);
+        strcat(temp1 , "end");
+        strcat(temp1 , c);
+        strcpy(label_for[num_for] , temp1);
+        fprintf(fp , "ifeq %s\n" , label_for[num_for]);
+        num_for = num_for + 1;
     }
 ;
 ForStmt
-    : FOR Condition Block
-    | FOR ForClause Block
+    : Begin_For Condition Block_for 
+    { 
+        
+    }
+    | Begin_For ForClause Block_for
+;
+Begin_For
+    : FOR 
+    {
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , num_for);
+        strcat(temp1 , "begin");
+        strcat(temp1 , c);
+        strcpy(label_for[num_for] , temp1);
+        fprintf(fp , "%s:\n" , label_for[num_for]);
+        num_for = num_for + 1;
+    }
+;
+Block_for
+    : Parantheses StatementList '}' { dump_symbol(); }
+    {
+        fprintf(fp , "goto %s\n" , label_for[num_for - 2]);
+        fprintf(fp , "%s:\n" , label_for[num_for-1]);
+        num_for = num_for - 2;
+    }
 ;
 ForClause
     : Init ';' Condition ';' Post
