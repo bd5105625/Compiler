@@ -60,6 +60,9 @@
     int label;  // distinguish jump label number(for some jump and if instruction)
     char *leftvar;//store left variable name
     void printassign();
+    int temp;// for calculating label num in "if"
+    char label_exit[10][20];
+    int num_exit , first;
 %} 
 
 %error-verbose
@@ -104,11 +107,17 @@
 /* Grammar section */
 %%
 Program
-    : StatementList { datatype = ""; }
+    : StatementList { datatype = ""; num_exit = 0; }
 ;
 
 StatementList
-    : StatementList { datatype = ""; } Statement
+    : StatementList 
+    { 
+        datatype = ""; 
+        label = label + temp; 
+        temp = 0; 
+//        num_exit = 0;
+    } Statement
     | Statement 
 ;
 
@@ -173,8 +182,7 @@ Dcl
         stack[current].type = table->type;
         if(!strcmp(table->type,"int32") || !strcmp(table->type , "bool"))
         {
-
-fprintf(fp , "istore %d\n" , current);
+            fprintf(fp , "istore %d\n" , current);
             stack[current].intnum = yylval.i_val;
         }
         else if(!strcmp(table->type , "float32"))
@@ -205,23 +213,59 @@ IfStmts
     |
 ;
 IfStmt
-    : IF Condition Block 
+    : IF Condition_if  Block
+    { 
+        fprintf(fp , "%s%d_false: \n" , jump , first); //condition false
+        label = label - 1;
+        temp = temp + 1;
+        first = 0;
+    } 
+    | IF Condition_if Block_if
+      ELSE IfStmt
     {
-        fprintf(fp , "%s%d_false:\n" , jump , label);//condition false
+        num_exit = num_exit - 1;
+        fprintf(fp , "%s:\n" , label_exit[num_exit]);
     }
-    | IF Condition Block ELSE IfStmt
-    | IF Condition Block ELSE Block
+    | IF Condition_if Block_if
+      ELSE Block_Else 
 ;
-Condition
+/*Condition_if_1
+    : Expr
+    {
+        if (strcmp(printtype , "bool"))
+        {
+            printf("error:%d: non-bool (type %s) used as for condition\n",yylineno+1,printtype);
+        }
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , label);
+        strcat(temp1 , jump);
+        strcat(temp1 , c);
+        strcat(temp1 , "_false");
+        strcpy(label_exit[num_exit] , temp1);
+        fprintf(fp , "ifeq %s%d_false\n" , jump , label);
+        num_exit = num_exit + 1;
+    }
+; */       
+Condition_if
     : Expr 
     { 
         if (strcmp(printtype , "bool"))
         {
-            printf("error:%d: non-bool (type %s) used as for condition\n" , yylineno+1 , printtype);
+            printf("error:%d: non-bool (type %s) used as for condition\n",yylineno+1,printtype);
         }
         fprintf(fp , "ifeq %s%d_false\n" , jump , label);
+        if(first == 0)
+            first = label;
     }
         
+;
+Condition
+    : Expr
+    {
+        if(strcmp(printtype , "bool"))
+            printf("error:%d: non-bool (type %s) used as for condition\n",yylineno+1,printtype);
+    }
 ;
 ForStmt
     : FOR Condition Block
@@ -310,7 +354,18 @@ Expr
     }
     | Expr NEQ Expr { printf("NEQ\n"); printtype = "bool";}
     | Expr GEQ Expr { printf("GEQ\n"); printtype = "bool";}
-    | Expr LEQ Expr { printf("LEQ\n"); printtype = "bool";}
+    | Expr LEQ Expr { //printf("LEQ\n"); 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "isub\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "fcmpl\n");
+        fprintf(fp , "ifle %s%d_0\n" , jump , label);
+        fprintf(fp , "iconst_0\ngoto %s%d_1\n" , jump , label);
+        fprintf(fp , "%s%d_0:\n" , jump , label);
+        fprintf(fp , "iconst_1\n%s%d_1:\n" , jump , label);
+        label = label + 1;
+        printtype = "bool";
+    }
     | Expr LOR { s1 = printtype; } Expr
     { s2 = printtype;
       if (strcmp("bool" , s1)){ yyerror(); 
@@ -523,9 +578,35 @@ PrintStmt
     }
 ;
 Block
-    : '{' { nowlevel = nowlevel + 1;} StatementList '}' { 
-                              dump_symbol();
-                            }
+    : Parantheses StatementList '}' { dump_symbol(); }
+;
+Parantheses
+    : '{' { nowlevel = nowlevel + 1; }
+;
+Block_if
+    : Parantheses StatementList '}' 
+    { 
+        dump_symbol(); 
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , label);
+        strcat(temp1 , jump);
+        strcat(temp1 , c);
+        strcat(temp1 , "_exit");
+        strcpy(label_exit[num_exit] , temp1);
+        fprintf(fp , "goto %s\n" , label_exit[num_exit]);//condition true and exit if statement
+        fprintf(fp , "%s%d_false:\n" , jump , label);//condition false
+        label = label + 1;
+        num_exit = num_exit + 1;
+    }
+;
+Block_Else
+    : Parantheses StatementList '}'
+    {
+        dump_symbol();
+        num_exit = num_exit - 1;
+        fprintf(fp , "%s:\n" , label_exit[num_exit]);
+    }
 ;
 IndexExpr
     : PrimaryExpr { find = get(yylval.s_val); } '[' Expr ']' 
