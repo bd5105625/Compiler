@@ -417,7 +417,18 @@ Expr
         label = label + 1;
         printtype = "bool";
     }
-    | Expr '<' Expr { printf("LSS\n"); printtype = "bool";}
+    | Expr '<' Expr { printf("LSS\n"); 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "isub\n");
+        else if(!strcmp(printtype , "float32"))
+            fprintf(fp , "fcmpl\n");
+        fprintf(fp , "iflt %s%d_0\n" , jump , label);
+        fprintf(fp , "iconst_0\ngoto %s%d_1\n" , jump , label);
+        fprintf(fp , "%s%d_0:\n" , jump , label);
+        fprintf(fp , "iconst_1\n%s%d_1:\n" , jump , label);
+        label = label + 1;
+        printtype = "bool";
+    }
     | Expr '>' Expr { printf("GTR\n"); 
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "isub\n");
@@ -430,7 +441,18 @@ Expr
         label = label + 1;
         printtype = "bool";
     }
-    | Expr NEQ Expr { printf("NEQ\n"); printtype = "bool";}
+    | Expr NEQ Expr { printf("NEQ\n"); 
+        if(!strcmp(printtype , "int32"))
+            fprintf(fp , "isub\n");
+        else if (!strcmp(printtype , "float32"))
+            fprintf(fp , "fcmpl\n");
+        fprintf(fp , "ifne %s%d_0\n" , jump , label);
+        fprintf(fp , "iconst_0\ngoto %s%d_1\n" , jump , label);
+        fprintf(fp , "%s%d_0:\n" , jump , label);
+        fprintf(fp , "iconst_1\n%s%d_1:\n" , jump , label);
+        label = label + 1;
+        printtype = "bool";
+    }
     | Expr GEQ Expr { printf("GEQ\n"); printtype = "bool";}
     | Expr LEQ Expr { printf("LEQ\n"); 
         if(!strcmp(printtype , "int32"))
@@ -599,7 +621,17 @@ LeftExpr
         leftvar = yylval.s_val; 
         find = get(yylval.s_val);
         if(find != NULL)
+        {
                 printf("IDENT (name=%s, address=%d)\n", yylval.s_val , find->address);
+                if(!strcmp(find->type , "int32"))
+                    printtype = "int32";
+                else if (!strcmp(find->type , "float32"))
+                    printtype = "float32";
+                else if (!strcmp(find->type , "string"))
+                    printtype = "string";
+                else if (!strcmp(find->type , "bool"))
+                    printtype = "bool";
+        }
     }
     | Index
 ;
