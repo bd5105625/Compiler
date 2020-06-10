@@ -53,6 +53,7 @@
         float floatnum;//store floating number
         char *content;//store string
         int status;//-1 means pop out
+        int array;//whether is array(either int array or floating array) 1 for array 
     };
     struct Stack stack[100];
     int current;//current stack
@@ -119,7 +120,6 @@ StatementList
         datatype = ""; 
         label = label + temp; 
         temp = 0; 
-//        num_exit = 0;
     } Statement
     | Statement 
 ;
@@ -162,6 +162,16 @@ Dcl
         {
             fprintf(fp , "ldc \"\"\nastore %d\n" , current);
             stack[current].content = yylval.s_val;
+        }
+        else if(!strcmp(table->type , "array"))
+        {
+            stack[current].type = table->eletype;//int or float
+            stack[current].array = 1;   //this is array int or array float
+            if(!strcmp(table->eletype , "int32"))
+                fprintf(fp , "newarray int\n");
+            else if(!strcmp(table->eletype , "float32"))
+                fprintf(fp , "newarray float\n");
+            fprintf(fp , "astore %d\n" , current);
         }
         current = current + 1;
         find = get(table->name);
@@ -365,22 +375,22 @@ ArrayType
 Expr
     : UnaryExpr
     | Expr '+'{ s1 = printtype; } Expr 
-    { s2 = printtype; invalidoper("ADD"); //printf("ADD\n"); }  
+    { s2 = printtype; invalidoper("ADD"); printf("ADD\n");
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "iadd\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "fadd\n");
     }
     | Expr '-'{ s1 = printtype; } Expr 
-    { s2 = printtype; invalidoper("SUB"); //printf("SUB\n"); }
+    { s2 = printtype; invalidoper("SUB"); printf("SUB\n");
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "isub\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "fsub\n");
     }
     | Expr '*'{ s1 = printtype; } Expr 
-    { s2 = printtype; invalidoper("MUL"); //printf("MUL\n"); }
+    { s2 = printtype; invalidoper("MUL"); printf("MUL\n"); 
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "imul\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "fmul\n");
     }
     | Expr '/'{ s1 = printtype; } Expr 
-    { s2 = printtype; invalidoper("QUO"); //printf("QUO\n"); }
+    { s2 = printtype; invalidoper("QUO"); printf("QUO\n");
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "idiv\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "fdiv\n");
     }
@@ -391,11 +401,11 @@ Expr
         yyerror();
         printf(" invalid operation: (operator REM not defined on float32)\n");
       }
-//      printf("REM\n"); }
+      printf("REM\n"); 
         if(!strcmp(s1 , "int32") && !strcmp(s2 , "int32")) fprintf(fp , "irem\n");
         else if(!strcmp(s1 , "float32") && !strcmp(s2 , "float32")) fprintf(fp , "frem\n");
     }
-    | Expr EQL Expr { //printf("EQL\n"); 
+    | Expr EQL Expr { printf("EQL\n"); 
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "isub\n");
         else if (!strcmp(printtype , "float32"))
@@ -408,7 +418,7 @@ Expr
         printtype = "bool";
     }
     | Expr '<' Expr { printf("LSS\n"); printtype = "bool";}
-    | Expr '>' Expr { //printf("GTR\n"); 
+    | Expr '>' Expr { printf("GTR\n"); 
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "isub\n");
         else if (!strcmp(printtype , "float32"))
@@ -422,7 +432,7 @@ Expr
     }
     | Expr NEQ Expr { printf("NEQ\n"); printtype = "bool";}
     | Expr GEQ Expr { printf("GEQ\n"); printtype = "bool";}
-    | Expr LEQ Expr { //printf("LEQ\n"); 
+    | Expr LEQ Expr { printf("LEQ\n"); 
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "isub\n");
         else if (!strcmp(printtype , "float32"))
@@ -509,20 +519,20 @@ Operand
     | '(' Expr ')'
 ;
 Literal
-    : INT_LIT { //printf("%s %d\n" , "INT_LIT" , yylval.i_val); 
+    : INT_LIT { printf("%s %d\n" , "INT_LIT" , yylval.i_val); 
     fprintf(fp , "ldc %d\n" , yylval.i_val);
     printtype = "int32";
     datatype = "LIT";}
-    | FLOAT_LIT { //printf("%s %f\n" , "FLOAT_LIT" , yylval.f_val); 
+    | FLOAT_LIT { printf("%s %f\n" , "FLOAT_LIT" , yylval.f_val); 
     fprintf(fp , "ldc %.6f\n" , yylval.f_val);
     printtype = "float32";}
-    | STRING_LIT { //printf("%s %s\n" , "STRING_LIT" , yylval.s_val); 
+    | STRING_LIT { printf("%s %s\n" , "STRING_LIT" , yylval.s_val); 
     fprintf(fp , "ldc \"%s\"\n" , yylval.s_val);
     printtype = "string";}
-    | TRUE { //printf("TRUE\n"); 
+    | TRUE { printf("TRUE\n"); 
     fprintf(fp , "iconst_1\n");
     printtype = "bool";}
-    | FALSE { //printf("FALSE\n"); 
+    | FALSE { printf("FALSE\n");
     fprintf(fp , "iconst_0\n");
     printtype = "bool";}
 ;
@@ -584,17 +594,38 @@ Assignment
     }
 ;
 LeftExpr
-    : ID { leftvar = yylval.s_val; }
-    | IndexExpr { leftvar = yylval.s_val; }
+    : ID 
+    { 
+        leftvar = yylval.s_val; 
+        find = get(yylval.s_val);
+        if(find != NULL)
+                printf("IDENT (name=%s, address=%d)\n", yylval.s_val , find->address);
+    }
+    | Index
+;
+Index
+    : PrimaryExpr 
+    { 
+        leftvar = yylval.s_val; 
+        find = get(yylval.s_val); 
+        fprintf(fp , "aload %d\n" , findstack(leftvar));    
+    } 
+    '[' Expr ']'
+    {
+        if(!strcmp(find->eletype , "int32"))
+            printtype = "int32";
+        else if (!strcmp(find->eletype , "float32"))
+            printtype = "float32";
+    }
 ;
 IncDec
-    : Expr INC { //printf("INC\n"); }
+    : Expr INC { printf("INC\n"); 
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "ldc 1\niadd\nistore %d\n" , findstack(yylval.s_val));
         else if(!strcmp(printtype , "float32"))
             fprintf(fp , "ldc 1.0\nfadd\nfstore %d\n" , findstack(yylval.s_val));
         }
-    | Expr DEC { //printf("DEC\n"); }
+    | Expr DEC { printf("DEC\n");
         if(!strcmp(printtype , "int32"))
             fprintf(fp , "ldc 1\nisub\nistore %d\n" , findstack(yylval.s_val));
         else if(!strcmp(printtype , "float32"))
@@ -602,7 +633,7 @@ IncDec
     }
 ;
 PrintStmt
-    : PRINT '(' Expr ')' { //printf("%s" , "PRINT"); 
+    : PRINT '(' Expr ')' { printf("%s" , "PRINT"); 
         if(!strcmp(printtype , "bool"))
         {
             fprintf(fp , "ifne %s%d_0\n" , jump , label);
@@ -615,15 +646,27 @@ PrintStmt
         fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
         fprintf(fp , "swap\n");
         if (!strcmp(printtype , "int32"))
+        {
             fprintf(fp , "invokevirtual java/io/PrintStream/print(I)V\n");
+            printf(" int32\n");
+        }
         else if (!strcmp(printtype , "float32"))
+        {
             fprintf(fp , "invokevirtual java/io/PrintStream/print(F)V\n");
+            printf(" float32\n");
+        }
         else if (!strcmp(printtype , "string"))
+        {
             fprintf(fp ,"invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
+            printf(" string\n");
+        }
         else if (!strcmp(printtype , "bool"))
+        {
             fprintf(fp ,"invokevirtual java/io/PrintStream/print(Ljava/lang/String;)V\n");
+            printf(" bool\n");
+        }
     }
-    | PRINTLN '(' Expr ')' { //printf("%s", "PRINTLN"); 
+    | PRINTLN '(' Expr ')' { printf("%s", "PRINTLN"); 
         if(!strcmp(printtype , "bool"))
         {
             fprintf(fp , "ifne %s%d_0\n" , jump , label);
@@ -636,13 +679,25 @@ PrintStmt
         fprintf(fp , "getstatic java/lang/System/out Ljava/io/PrintStream;\n");
         fprintf(fp , "swap\n");
         if (!strcmp(printtype , "int32"))
+        {
             fprintf(fp , "invokevirtual java/io/PrintStream/println(I)V\n");
+            printf(" int32\n");
+        }
         else if (!strcmp(printtype , "float32"))
+        {
             fprintf(fp , "invokevirtual java/io/PrintStream/println(F)V\n");
+            printf(" float32\n");
+        }
         else if (!strcmp(printtype , "string"))
+        {
             fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
+            printf(" string\n");
+        }
         else if (!strcmp(printtype , "bool"))
+        {
             fprintf(fp ,"invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V\n");
+            printf(" bool\n");
+        }
     }
 ;
 Block
@@ -677,16 +732,24 @@ Block_Else
     }
 ;
 IndexExpr
-    : PrimaryExpr { find = get(yylval.s_val); } '[' Expr ']' 
+    : PrimaryExpr 
+    { 
+        leftvar = yylval.s_val; 
+        find = get(yylval.s_val); 
+        fprintf(fp , "aload %d\n" , findstack(leftvar));
+    } 
+    '[' Expr ']' 
     {
         if(!strcmp(find->eletype , "int32"))
+        {
             printtype = "int32";
+            fprintf(fp , "iaload\n");
+        }
         else if (!strcmp(find->eletype , "float32"))
+        {
             printtype = "float32";
-        else if (!strcmp(find->eletype , "string"))
-            printtype = "string";
-        else if (!strcmp(find->eletype , "bool"))
-            printtype = "bool";
+            fprintf(fp , "faload\n");
+        }
     }
 ;
 Conversion
@@ -734,7 +797,7 @@ int main(int argc, char *argv[])
 
     yylineno = 0;
     yyparse();
-//    dump_symbol();
+    dump_symbol();
 	printf("Total lines: %d\n", yylineno);
     fclose(yyin);
     struct table *tmp;
@@ -837,9 +900,19 @@ int findstack(char *name)
 void printassign()
 {
     if(!strcmp(printtype , "int32") || !strcmp(printtype , "bool"))
-        fprintf(fp , "istore %d\n" , findstack(leftvar));
+    {
+        if(stack[findstack(leftvar)].array == 1)// array integer
+            fprintf(fp , "iastore\n");
+        else
+            fprintf(fp , "istore %d\n" , findstack(leftvar));
+    }
     else if(!strcmp(printtype , "float32"))
-        fprintf(fp , "fstore %d\n" , findstack(leftvar));
+    {
+        if(stack[findstack(leftvar)].array == 1)//array float
+            fprintf(fp , "fastore\n");
+        else
+            fprintf(fp , "fstore %d\n" , findstack(leftvar));
+    }
     else if(!strcmp(printtype , "string"))
         fprintf(fp , "astore %d\n" , findstack(leftvar));
 }
