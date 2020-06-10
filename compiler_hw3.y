@@ -253,12 +253,13 @@ Condition
 
         char c[10];
         char temp1[100] = "";
-        sprintf(c , "%d" , num_for);
+        sprintf(c , "%d" , label);
         strcat(temp1 , "end");
         strcat(temp1 , c);
         strcpy(label_for[num_for] , temp1);
         fprintf(fp , "ifeq %s\n" , label_for[num_for]);
         num_for = num_for + 1;
+        label = label + 1;
     }
 ;
 ForStmt
@@ -266,31 +267,80 @@ ForStmt
     { 
         
     }
-    | Begin_For ForClause Block_for
+    | Begin_For ForClause Block_for_Post
 ;
 Begin_For
     : FOR 
     {
         char c[10];
         char temp1[100] = "";
-        sprintf(c , "%d" , num_for);
+        sprintf(c , "%d" , label);
         strcat(temp1 , "begin");
         strcat(temp1 , c);
         strcpy(label_for[num_for] , temp1);
         fprintf(fp , "%s:\n" , label_for[num_for]);
         num_for = num_for + 1;
-    }
+        label = label + 1;
+    } 
 ;
 Block_for
-    : Parantheses StatementList '}' { dump_symbol(); }
+    : Parantheses StatementList '}'
     {
+        dump_symbol();
         fprintf(fp , "goto %s\n" , label_for[num_for - 2]);
-        fprintf(fp , "%s:\n" , label_for[num_for-1]);
+        fprintf(fp , "%s:\n" , label_for[num_for - 1]);
         num_for = num_for - 2;
     }
 ;
+Block_for_Post
+    : Parantheses 
+    {
+        fprintf(fp , "%s:\n" , label_for[num_for - 4]);
+    }
+    StatementList '}' { dump_symbol(); }
+    {
+        fprintf(fp , "goto %s\n" , label_for[num_for - 1]);
+        fprintf(fp , "%s:\n" , label_for[num_for-2]);
+        num_for = num_for - 4;
+    }
+;
 ForClause
-    : Init ';' Condition ';' Post
+    : Init 
+    {   
+        num_for = num_for - 1;
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , label);
+        strcat(temp1 , "state");
+        strcat(temp1 , c);
+        strcpy(label_for[num_for] , temp1);
+        fprintf(fp , "goto %s\n" , label_for[num_for]);
+        num_for = num_for + 1;
+        strcpy(temp1 , "");
+        strcat(temp1 , "begin");
+        strcat(temp1 , c);
+        strcpy(label_for[num_for] , temp1);
+        fprintf(fp , "%s:\n" , label_for[num_for]);
+        num_for = num_for + 1;
+        label = label + 1;
+    }
+    ';' Condition 
+    {   fprintf(fp , "goto %s\n" , label_for[num_for-3]); }
+    ';' 
+    {
+        char c[10];
+        char temp1[100] = "";
+        sprintf(c , "%d" , label);
+        strcat(temp1 , "post");
+        strcat(temp1 , c);
+        strcpy(label_for[num_for] , temp1);
+        fprintf(fp , "%s:\n" , label_for[num_for]);
+        num_for = num_for + 1;
+    }
+    Post
+    {
+        fprintf(fp , "goto %s\n" , label_for[num_for-3]);
+    }
 ;
 Init
     : SimpleStmt
